@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.description = "Redis-backed distributed read-write locks. Multiple concurrent readers, exclusive writers."
   spec.homepage = "https://github.com/umbrellio/redis-read-write-locks"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0"
+  spec.required_ruby_version = ">= 3.2"
 
   spec.files = Dir["lib/**/*.rb", "*.gemspec", "LICENSE", "README.md"]
   spec.require_paths = ["lib"]
