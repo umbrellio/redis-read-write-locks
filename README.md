@@ -1,0 +1,75 @@
+# redis-read-write-locks
+
+Distributed read-write locks for Ruby backed by Redis.
+
+- Multiple readers can hold the lock simultaneously
+- Writers get exclusive access (blocks all readers and other writers)
+- Locks expire automatically via TTL — no deadlock on crash
+- Atomic operations via Lua scripts
+
+## Installation
+
+```ruby
+gem "redis-read-write-locks"
+```
+
+## Usage
+
+```ruby
+require "redis"
+require "redis_read_write_locks"
+
+client = RedisReadWriteLocks::Client.new(Redis.new(url: "redis://localhost:6379/0"))
+
+# Block form — acquires, yields, releases
+client.read_lock("my_resource") { read_data }
+client.write_lock("my_resource") { write_data }
+
+# Manual acquire/release
+lock = client.read_lock("my_resource")
+lock.acquire          # => true / false (non-blocking)
+lock.release
+
+# Block on contention — retries for up to N seconds
+lock.acquire(timeout: 5)          # raises LockTimeoutError if timeout exceeded
+lock.synchronize(timeout: 5) { }  # acquire + yield + release
+
+# Per-lock TTL override
+client.write_lock("my_resource", ttl: 60) { long_operation }
+```
+
+### Client options
+
+```ruby
+client = RedisReadWriteLocks::Client.new(redis, default_ttl: 60)
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `ttl`  | `30`    | Lock TTL in seconds. Lock auto-expires if holder crashes. |
+
+### Errors
+
+| Error | When |
+|-------|------|
+| `LockNotAcquiredError` | `synchronize` (no timeout) called when lock is contended |
+| `LockTimeoutError` | `acquire(timeout:)` or `synchronize(timeout:)` exceeded timeout |
+
+## Redis key structure
+
+```
+rw_lock:writer:<name>   # String, holds owner token, TTL = lock TTL
+rw_lock:readers:<name>  # Sorted set, member = token, score = expiry timestamp
+```
+
+## Requirements
+
+- Ruby >= 2.7
+- Redis >= 5.0
+- `redis` gem >= 4.0
+
+## License
+
+MIT
