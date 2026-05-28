@@ -2,7 +2,7 @@ require "securerandom"
 
 module RedisReadWriteLocks
   class BaseLock
-    DEFAULT_TTL = 30
+    DEFAULT_TTL = 30_000
     RETRY_INTERVAL = 0.01
 
     attr_reader :name, :token

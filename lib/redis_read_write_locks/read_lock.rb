@@ -12,7 +12,7 @@ module RedisReadWriteLocks
 
     def try_acquire
       now = Time.now.to_i
-      expiry = now + @ttl
+      expiry = now + @ttl / 1000
 
       result = eval_script(
         LockScripts::ACQUIRE_READ,

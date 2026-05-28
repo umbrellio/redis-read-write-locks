@@ -35,13 +35,13 @@ lock.acquire(timeout: 5000)          # raises LockTimeoutError if timeout exceed
 lock.synchronize(timeout: 5000) { }  # acquire + yield + release
 
 # Per-lock TTL override
-client.write_lock("my_resource", ttl: 60) { long_operation }
+client.write_lock("my_resource", ttl: 60_000) { long_operation }
 ```
 
 ### Client options
 
 ```ruby
-client = RedisReadWriteLocks::Client.new(redis, default_ttl: 60)
+client = RedisReadWriteLocks::Client.new(redis, default_ttl: 60_000)
 ```
 
 ### Options

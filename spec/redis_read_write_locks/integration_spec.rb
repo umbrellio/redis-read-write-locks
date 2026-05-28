@@ -3,7 +3,7 @@ RSpec.describe "concurrent read-write locking" do
   let(:redis) { REDIS }
 
   it "allows many concurrent readers" do
-    readers = 5.times.map { RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5) }
+    readers = 5.times.map { RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5_000) }
     results = readers.map { |r| r.acquire }
 
     expect(results).to all(be true)
@@ -12,8 +12,8 @@ RSpec.describe "concurrent read-write locking" do
   end
 
   it "writer waits for all readers to finish" do
-    reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5)
-    writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 5)
+    reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5_000)
+    writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 5_000)
 
     reader.acquire
 
@@ -36,8 +36,8 @@ RSpec.describe "concurrent read-write locking" do
   end
 
   it "readers wait for writer to finish" do
-    writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 5)
-    reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5)
+    writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 5_000)
+    reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5_000)
 
     writer.acquire
 
@@ -70,10 +70,10 @@ RSpec.describe "concurrent read-write locking" do
   end
 
   it "lock expires automatically after TTL" do
-    writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 1)
+    writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 1_000)
     writer.acquire
 
-    reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5)
+    reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5_000)
     expect(reader.acquire).to be false
 
     sleep 1.1

@@ -1,5 +1,5 @@
 RSpec.describe RedisReadWriteLocks::WriteLock do
-  subject(:lock) { described_class.new(redis: REDIS, name: "test_resource", ttl: 10) }
+  subject(:lock) { described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000) }
 
   describe "#acquire" do
     it "acquires when no locks held" do
@@ -8,21 +8,21 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
     end
 
     it "fails when reader holds lock" do
-      reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+      reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       reader.acquire
 
       expect(lock.acquire).to be false
     end
 
     it "fails when another writer holds lock" do
-      other = described_class.new(redis: REDIS, name: "test_resource", ttl: 10)
+      other = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       other.acquire
 
       expect(lock.acquire).to be false
     end
 
     it "blocks different resource names independently" do
-      other_lock = described_class.new(redis: REDIS, name: "other_resource", ttl: 10)
+      other_lock = described_class.new(redis: REDIS, name: "other_resource", ttl: 10_000)
       other_lock.acquire
 
       expect(lock.acquire).to be true
@@ -30,7 +30,7 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
 
     context "with timeout" do
       it "retries and acquires when reader releases" do
-        reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+        reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
         reader.acquire
 
         Thread.new { sleep 0.05; reader.release }
@@ -39,7 +39,7 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       end
 
       it "raises LockTimeoutError when timeout exceeded" do
-        reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+        reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
         reader.acquire
 
         expect { lock.acquire(timeout: 50) }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
@@ -61,7 +61,7 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
     it "does not release lock owned by different token" do
       lock.acquire
 
-      imposter = described_class.new(redis: REDIS, name: "test_resource", ttl: 10)
+      imposter = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       imposter.instance_variable_set(:@acquired, true)
       imposter.release
 
@@ -73,7 +73,7 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       lock.acquire
       lock.release
 
-      reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+      reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       expect(reader.acquire).to be true
     end
   end
@@ -93,7 +93,7 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
     end
 
     it "raises LockNotAcquiredError when blocked" do
-      other = described_class.new(redis: REDIS, name: "test_resource", ttl: 10)
+      other = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       other.acquire
 
       expect { lock.synchronize {} }.to raise_error(RedisReadWriteLocks::LockNotAcquiredError)

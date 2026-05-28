@@ -1,5 +1,5 @@
 RSpec.describe RedisReadWriteLocks::ReadLock do
-  subject(:lock) { described_class.new(redis: REDIS, name: "test_resource", ttl: 10) }
+  subject(:lock) { described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000) }
 
   describe "#acquire" do
     it "acquires when no locks held" do
@@ -8,14 +8,14 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
     end
 
     it "acquires when another reader holds lock" do
-      other = described_class.new(redis: REDIS, name: "test_resource", ttl: 10)
+      other = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       other.acquire
 
       expect(lock.acquire).to be true
     end
 
     it "fails when writer holds lock" do
-      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       writer.acquire
 
       expect(lock.acquire).to be false
@@ -23,7 +23,7 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
     end
 
     it "blocks different resource names independently" do
-      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "other_resource", ttl: 10)
+      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "other_resource", ttl: 10_000)
       writer.acquire
 
       expect(lock.acquire).to be true
@@ -31,7 +31,7 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
 
     context "with timeout" do
       it "retries and acquires when writer releases" do
-        writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+        writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
         writer.acquire
 
         Thread.new { sleep 0.05; writer.release }
@@ -40,7 +40,7 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
       end
 
       it "raises LockTimeoutError when timeout exceeded" do
-        writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+        writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
         writer.acquire
 
         expect { lock.acquire(timeout: 50) }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
@@ -63,7 +63,7 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
       lock.acquire
       lock.release
 
-      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       expect(writer.acquire).to be true
     end
   end
@@ -83,14 +83,14 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
     end
 
     it "raises LockNotAcquiredError when blocked" do
-      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       writer.acquire
 
       expect { lock.synchronize {} }.to raise_error(RedisReadWriteLocks::LockNotAcquiredError)
     end
 
     it "waits for lock with timeout" do
-      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10)
+      writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       writer.acquire
       Thread.new { sleep 0.05; writer.release }
 

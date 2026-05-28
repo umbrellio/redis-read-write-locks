@@ -9,28 +9,28 @@ RSpec.describe "redis-client compatibility" do
     before { redis.call("FLUSHDB") }
 
     it "read lock acquires and releases" do
-      lock = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10)
+      lock = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10_000)
       expect(lock.acquire).to be true
       expect(lock.release).to be true
     end
 
     it "write lock acquires and releases" do
-      lock = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 10)
+      lock = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 10_000)
       expect(lock.acquire).to be true
       expect(lock.release).to be true
     end
 
     it "writer blocks reader" do
-      writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 10)
-      reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10)
+      writer = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 10_000)
+      reader = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10_000)
       writer.acquire
       expect(reader.acquire).to be false
       writer.release
     end
 
     it "multiple readers coexist" do
-      r1 = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10)
-      r2 = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10)
+      r1 = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10_000)
+      r2 = RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 10_000)
       expect(r1.acquire).to be true
       expect(r2.acquire).to be true
       r1.release
@@ -38,7 +38,7 @@ RSpec.describe "redis-client compatibility" do
     end
 
     it "synchronize acquires, yields, releases" do
-      lock = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 10)
+      lock = RedisReadWriteLocks::WriteLock.new(redis: redis, name: name, ttl: 10_000)
       yielded = false
       lock.synchronize { yielded = true }
       expect(yielded).to be true
