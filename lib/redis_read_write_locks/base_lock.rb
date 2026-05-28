@@ -3,7 +3,7 @@ require "securerandom"
 module RedisReadWriteLocks
   class BaseLock
     DEFAULT_TTL = 30_000
-    RETRY_INTERVAL = 0.01
+    DEFAULT_RETRY_DELAY = 100
 
     attr_reader :name, :token
 
@@ -19,23 +19,20 @@ module RedisReadWriteLocks
       @acquired
     end
 
-    # Non-blocking: returns true/false.
-    # With timeout: retries for timeout milliseconds, returns true or raises LockTimeoutError.
-    def acquire(timeout: nil)
-      return try_acquire if timeout.nil?
+    def acquire(retry_count: nil, retry_delay: DEFAULT_RETRY_DELAY)
+      return try_acquire if retry_count.nil?
 
-      deadline = Time.now.to_f + timeout / 1000.0
-      loop do
+      return true if try_acquire
+      retry_count.times do
+        sleep retry_delay / 1000.0
         return true if try_acquire
-        raise LockTimeoutError, "Timeout acquiring #{lock_type} lock '#{@name}'" if Time.now.to_f >= deadline
-        sleep RETRY_INTERVAL
       end
+      raise LockTimeoutError, "Could not acquire #{lock_type} lock '#{@name}' after #{retry_count} retries"
     end
 
-    # Acquires lock, yields, releases. Raises LockNotAcquiredError if non-blocking acquire fails.
-    def synchronize(timeout: nil, &block)
-      if timeout
-        acquire(timeout: timeout)
+    def synchronize(retry_count: nil, retry_delay: DEFAULT_RETRY_DELAY, &block)
+      if retry_count
+        acquire(retry_count: retry_count, retry_delay: retry_delay)
       else
         acquire || raise(LockNotAcquiredError, "Could not acquire #{lock_type} lock '#{@name}'")
       end

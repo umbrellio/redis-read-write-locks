@@ -21,7 +21,7 @@ RSpec.describe "concurrent read-write locking" do
     reader_released_at = nil
 
     writer_thread = Thread.new do
-      writer.acquire(timeout: 2000)
+      writer.acquire(retry_count: 50, retry_delay: 50)
       acquired_at = Time.now.to_f
     end
 
@@ -45,7 +45,7 @@ RSpec.describe "concurrent read-write locking" do
     writer_released_at = nil
 
     reader_thread = Thread.new do
-      reader.acquire(timeout: 2000)
+      reader.acquire(retry_count: 50, retry_delay: 50)
       acquired_at = Time.now.to_f
     end
 

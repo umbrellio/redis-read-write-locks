@@ -28,21 +28,21 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       expect(lock.acquire).to be true
     end
 
-    context "with timeout" do
+    context "with retry_count" do
       it "retries and acquires when reader releases" do
         reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
         reader.acquire
 
         Thread.new { sleep 0.05; reader.release }
 
-        expect(lock.acquire(timeout: 1000)).to be true
+        expect(lock.acquire(retry_count: 20, retry_delay: 10)).to be true
       end
 
-      it "raises LockTimeoutError when timeout exceeded" do
+      it "raises LockTimeoutError when retries exhausted" do
         reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
         reader.acquire
 
-        expect { lock.acquire(timeout: 50) }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
+        expect { lock.acquire(retry_count: 2, retry_delay: 10) }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
       end
     end
   end

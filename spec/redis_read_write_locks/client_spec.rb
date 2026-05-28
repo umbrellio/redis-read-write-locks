@@ -18,21 +18,21 @@ RSpec.describe RedisReadWriteLocks::Client do
       expect(lock.instance_variable_get(:@ttl)).to eq(99_000)
     end
 
-    it "retries until writer releases when timeout given" do
+    it "retries until writer releases when retry_count given" do
       writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "res", ttl: 10_000)
       writer.acquire
       Thread.new { sleep 0.05; writer.release }
 
       acquired = nil
-      client.read_lock("res", timeout: 1000) { acquired = true }
+      client.read_lock("res", retry_count: 20, retry_delay: 10) { acquired = true }
       expect(acquired).to be true
     end
 
-    it "raises LockTimeoutError when contended and timeout exceeded" do
+    it "raises LockTimeoutError when contended and retries exhausted" do
       writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "res", ttl: 10_000)
       writer.acquire
 
-      expect { client.read_lock("res", timeout: 50) {} }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
+      expect { client.read_lock("res", retry_count: 2, retry_delay: 10) {} }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
       writer.release
     end
 
@@ -57,21 +57,21 @@ RSpec.describe RedisReadWriteLocks::Client do
       expect(acquired).to be true
     end
 
-    it "retries until reader releases when timeout given" do
+    it "retries until reader releases when retry_count given" do
       reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "res", ttl: 10_000)
       reader.acquire
       Thread.new { sleep 0.05; reader.release }
 
       acquired = nil
-      client.write_lock("res", timeout: 1000) { acquired = true }
+      client.write_lock("res", retry_count: 20, retry_delay: 10) { acquired = true }
       expect(acquired).to be true
     end
 
-    it "raises LockTimeoutError when contended and timeout exceeded" do
+    it "raises LockTimeoutError when contended and retries exhausted" do
       reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "res", ttl: 10_000)
       reader.acquire
 
-      expect { client.write_lock("res", timeout: 50) {} }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
+      expect { client.write_lock("res", retry_count: 2, retry_delay: 10) {} }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
       reader.release
     end
 
