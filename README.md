@@ -30,9 +30,9 @@ lock = client.read_lock("my_resource")
 lock.acquire          # => true / false (non-blocking)
 lock.release
 
-# Block on contention — retries for up to N seconds
-lock.acquire(timeout: 5)          # raises LockTimeoutError if timeout exceeded
-lock.synchronize(timeout: 5) { }  # acquire + yield + release
+# Block on contention — retries for up to N milliseconds
+lock.acquire(timeout: 5000)          # raises LockTimeoutError if timeout exceeded
+lock.synchronize(timeout: 5000) { }  # acquire + yield + release
 
 # Per-lock TTL override
 client.write_lock("my_resource", ttl: 60) { long_operation }

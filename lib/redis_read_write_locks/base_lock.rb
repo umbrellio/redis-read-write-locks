@@ -20,11 +20,11 @@ module RedisReadWriteLocks
     end
 
     # Non-blocking: returns true/false.
-    # With timeout: retries for timeout seconds, returns true or raises LockTimeoutError.
+    # With timeout: retries for timeout milliseconds, returns true or raises LockTimeoutError.
     def acquire(timeout: nil)
       return try_acquire if timeout.nil?
 
-      deadline = Time.now.to_f + timeout
+      deadline = Time.now.to_f + timeout / 1000.0
       loop do
         return true if try_acquire
         raise LockTimeoutError, "Timeout acquiring #{lock_type} lock '#{@name}'" if Time.now.to_f >= deadline

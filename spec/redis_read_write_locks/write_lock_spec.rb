@@ -35,14 +35,14 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
 
         Thread.new { sleep 0.05; reader.release }
 
-        expect(lock.acquire(timeout: 1)).to be true
+        expect(lock.acquire(timeout: 1000)).to be true
       end
 
       it "raises LockTimeoutError when timeout exceeded" do
         reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10)
         reader.acquire
 
-        expect { lock.acquire(timeout: 0.05) }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
+        expect { lock.acquire(timeout: 50) }.to raise_error(RedisReadWriteLocks::LockTimeoutError)
       end
     end
   end
