@@ -61,7 +61,11 @@ module RedisReadWriteLocks
     end
 
     def eval_script(script, keys:, argv:)
-      @redis.eval(script, keys: keys, argv: argv)
+      if @redis.respond_to?(:eval)
+        @redis.eval(script, keys: keys, argv: argv)
+      else
+        @redis.call("EVAL", script, keys.length, *keys, *argv)
+      end
     end
   end
 end
