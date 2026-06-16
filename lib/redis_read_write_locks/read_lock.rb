@@ -8,11 +8,20 @@ module RedisReadWriteLocks
       true
     end
 
+    def refresh
+      return false unless @acquired
+
+      now = Time.now.to_i
+      expiry = now + (@ttl / 1000.0).ceil
+      eval_script(LockScripts::REFRESH_READ, keys: [readers_key], argv: [@token, expiry, now])
+      true
+    end
+
     private
 
     def try_acquire
       now = Time.now.to_i
-      expiry = now + @ttl / 1000
+      expiry = now + (@ttl / 1000.0).ceil
 
       result = eval_script(
         LockScripts::ACQUIRE_READ,

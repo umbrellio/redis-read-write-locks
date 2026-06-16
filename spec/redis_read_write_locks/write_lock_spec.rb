@@ -78,6 +78,22 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
     end
   end
 
+  describe "#refresh" do
+    it "returns false when not acquired" do
+      expect(lock.refresh).to be false
+    end
+
+    it "extends TTL of held lock" do
+      short_lock = described_class.new(redis: REDIS, name: "test_resource", ttl: 500)
+      short_lock.acquire
+      sleep 0.4
+      expect(short_lock.refresh).to be true
+      sleep 0.4
+      expect(REDIS.exists?("rw_lock:writer:test_resource")).to be true
+      short_lock.release
+    end
+  end
+
   describe "#synchronize" do
     it "acquires, yields, releases" do
       result = nil
@@ -97,6 +113,14 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       other.acquire
 
       expect { lock.synchronize {} }.to raise_error(RedisReadWriteLocks::LockNotAcquiredError)
+    end
+
+    it "watchdog keeps lock alive beyond TTL" do
+      short_lock = described_class.new(redis: REDIS, name: "test_resource", ttl: 500)
+      short_lock.synchronize do
+        sleep 0.8
+        expect(REDIS.exists?("rw_lock:writer:test_resource")).to be true
+      end
     end
   end
 end

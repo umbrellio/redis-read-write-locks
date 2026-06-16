@@ -36,9 +36,18 @@ module RedisReadWriteLocks
       else
         acquire || raise(LockNotAcquiredError, "Could not acquire #{lock_type} lock '#{@name}'")
       end
+
+      watchdog = Thread.new do
+        loop do
+          sleep @ttl / 1000.0 / 2
+          refresh if @acquired
+        end
+      end
+
       begin
         block.call
       ensure
+        watchdog.kill
         release
       end
     end
