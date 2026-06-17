@@ -38,11 +38,13 @@ module RedisReadWriteLocks
 
     def synchronize(retry_count: nil, retry_delay: DEFAULT_RETRY_DELAY, &block)
       acquire_or_raise(retry_count: retry_count, retry_delay: retry_delay)
-      watchdog = start_watchdog(Thread.current)
+      stopped = false
+      watchdog = start_watchdog(Thread.current, -> { stopped })
       begin
         block.call
       ensure
-        watchdog.kill
+        stopped = true
+        watchdog.join
         release
       end
     end
@@ -55,18 +57,18 @@ module RedisReadWriteLocks
       acquire || raise(LockNotAcquiredError, "Could not acquire #{lock_type} lock '#{@name}'")
     end
 
-    def start_watchdog(main_thread)
+    def start_watchdog(main_thread, stopped)
       Thread.new do
-        elapsed = 0
-        loop do
+        elapsed = 0.0
+        until stopped.call
           sleep WATCHDOG_SLEEP_INTERVAL
           elapsed += WATCHDOG_SLEEP_INTERVAL
+          next if stopped.call
           next unless elapsed >= WATCHDOG_REFRESH_INTERVAL
 
-          elapsed = 0
+          elapsed = 0.0
           begin
-            refreshed = refresh
-            unless refreshed
+            unless refresh
               main_thread.raise(LockRefreshError, "Could not refresh #{lock_type} lock '#{@name}'")
               break
             end
