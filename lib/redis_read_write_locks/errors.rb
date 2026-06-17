@@ -1,5 +1,15 @@
+# frozen_string_literal: true
+
 module RedisReadWriteLocks
-  Error = Class.new(StandardError)
-  LockNotAcquiredError = Class.new(Error)
-  LockTimeoutError = Class.new(Error)
+  class Error < StandardError
+  end
+
+  class LockNotAcquiredError < Error
+  end
+
+  class LockTimeoutError < Error
+  end
+
+  class LockRefreshError < Error
+  end
 end

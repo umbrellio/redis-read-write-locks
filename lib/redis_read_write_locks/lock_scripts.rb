@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module RedisReadWriteLocks
   module LockScripts
     # KEYS[1] = writer_key, KEYS[2] = readers_key
     # ARGV[1] = token, ARGV[2] = expiry (unix ts), ARGV[3] = now (unix ts)
     # Returns 1 = acquired, 0 = blocked
-    ACQUIRE_READ = <<~LUA.freeze
+    ACQUIRE_READ = <<~LUA
       local writer_key = KEYS[1]
       local readers_key = KEYS[2]
       local token = ARGV[1]
@@ -28,7 +30,7 @@ module RedisReadWriteLocks
 
     # KEYS[1] = readers_key
     # ARGV[1] = token
-    RELEASE_READ = <<~LUA.freeze
+    RELEASE_READ = <<~LUA
       redis.call('ZREM', KEYS[1], ARGV[1])
       return 1
     LUA
@@ -36,7 +38,7 @@ module RedisReadWriteLocks
     # KEYS[1] = writer_key, KEYS[2] = readers_key
     # ARGV[1] = token, ARGV[2] = ttl (milliseconds), ARGV[3] = now (unix ts)
     # Returns 1 = acquired, 0 = blocked
-    ACQUIRE_WRITE = <<~LUA.freeze
+    ACQUIRE_WRITE = <<~LUA
       local writer_key = KEYS[1]
       local readers_key = KEYS[2]
       local token = ARGV[1]
@@ -60,7 +62,7 @@ module RedisReadWriteLocks
     # KEYS[1] = writer_key
     # ARGV[1] = token
     # Returns 1 = released, 0 = not owner
-    RELEASE_WRITE = <<~LUA.freeze
+    RELEASE_WRITE = <<~LUA
       if redis.call('GET', KEYS[1]) == ARGV[1] then
         redis.call('DEL', KEYS[1])
         return 1
@@ -71,7 +73,7 @@ module RedisReadWriteLocks
     # KEYS[1] = writer_key
     # ARGV[1] = token, ARGV[2] = ttl (milliseconds)
     # Returns 1 = refreshed, 0 = not owner
-    REFRESH_WRITE = <<~LUA.freeze
+    REFRESH_WRITE = <<~LUA
       if redis.call('GET', KEYS[1]) == ARGV[1] then
         redis.call('PEXPIRE', KEYS[1], ARGV[2])
         return 1
@@ -82,7 +84,7 @@ module RedisReadWriteLocks
     # KEYS[1] = readers_key
     # ARGV[1] = token, ARGV[2] = expiry (unix ts), ARGV[3] = now (unix ts)
     # Returns 1 = refreshed, 0 = not in set
-    REFRESH_READ = <<~LUA.freeze
+    REFRESH_READ = <<~LUA
       local readers_key = KEYS[1]
       local token = ARGV[1]
       local expiry = tonumber(ARGV[2])

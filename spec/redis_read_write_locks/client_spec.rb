@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 RSpec.describe RedisReadWriteLocks::Client do
   subject(:client) { described_class.new(REDIS) }
 
@@ -21,7 +23,10 @@ RSpec.describe RedisReadWriteLocks::Client do
     it "retries until writer releases when retry_count given" do
       writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "res", ttl: 10_000)
       writer.acquire
-      Thread.new { sleep 0.05; writer.release }
+      Thread.new do
+        sleep 0.05
+        writer.release
+      end
 
       acquired = nil
       client.read_lock("res", retry_count: 20, retry_delay: 10) { acquired = true }
@@ -60,7 +65,10 @@ RSpec.describe RedisReadWriteLocks::Client do
     it "retries until reader releases when retry_count given" do
       reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "res", ttl: 10_000)
       reader.acquire
-      Thread.new { sleep 0.05; reader.release }
+      Thread.new do
+        sleep 0.05
+        reader.release
+      end
 
       acquired = nil
       client.write_lock("res", retry_count: 20, retry_delay: 10) { acquired = true }

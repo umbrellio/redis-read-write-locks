@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 require "redis-client"
 
 RSpec.describe "redis-client compatibility" do
   let(:url) { ENV.fetch("REDIS_URL", "redis://localhost:6379/15") }
 
-  shared_examples "read-write lock behavior" do |client_desc|
+  shared_examples "read-write lock behavior" do |_client_desc|
     let(:name) { "rc_resource" }
 
     before { redis.call("FLUSHDB") }
@@ -48,6 +50,7 @@ RSpec.describe "redis-client compatibility" do
 
   context "with RedisClient" do
     let(:redis) { RedisClient.new(url: url) }
+
     after { redis.close }
 
     include_examples "read-write lock behavior", "RedisClient"
@@ -55,6 +58,7 @@ RSpec.describe "redis-client compatibility" do
 
   context "with RedisClient::Pooled" do
     let(:redis) { RedisClient.config(url: url).new_pool(size: 3) }
+
     after { redis.close }
 
     include_examples "read-write lock behavior", "RedisClient::Pooled"

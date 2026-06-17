@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module RedisReadWriteLocks
   class Client
     def initialize(redis, default_ttl: BaseLock::DEFAULT_TTL)

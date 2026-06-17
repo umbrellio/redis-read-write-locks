@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "securerandom"
 
 module RedisReadWriteLocks
@@ -23,6 +25,7 @@ module RedisReadWriteLocks
       return try_acquire if retry_count.nil?
 
       return true if try_acquire
+
       retry_count.times do
         sleep retry_delay / 1000.0
         return true if try_acquire
@@ -30,20 +33,12 @@ module RedisReadWriteLocks
       raise LockTimeoutError, "Could not acquire #{lock_type} lock '#{@name}' after #{retry_count} retries"
     end
 
+    WATCHDOG_REFRESH_INTERVAL = 10
+    WATCHDOG_SLEEP_INTERVAL = 0.5
+
     def synchronize(retry_count: nil, retry_delay: DEFAULT_RETRY_DELAY, &block)
-      if retry_count
-        acquire(retry_count: retry_count, retry_delay: retry_delay)
-      else
-        acquire || raise(LockNotAcquiredError, "Could not acquire #{lock_type} lock '#{@name}'")
-      end
-
-      watchdog = Thread.new do
-        loop do
-          sleep @ttl / 1000.0 / 2
-          refresh if @acquired
-        end
-      end
-
+      acquire_or_raise(retry_count: retry_count, retry_delay: retry_delay)
+      watchdog = start_watchdog(Thread.current)
       begin
         block.call
       ensure
@@ -53,6 +48,35 @@ module RedisReadWriteLocks
     end
 
     private
+
+    def acquire_or_raise(retry_count:, retry_delay:)
+      return acquire(retry_count: retry_count, retry_delay: retry_delay) if retry_count
+
+      acquire || raise(LockNotAcquiredError, "Could not acquire #{lock_type} lock '#{@name}'")
+    end
+
+    def start_watchdog(main_thread)
+      Thread.new do
+        elapsed = 0
+        loop do
+          sleep WATCHDOG_SLEEP_INTERVAL
+          elapsed += WATCHDOG_SLEEP_INTERVAL
+          next unless elapsed >= WATCHDOG_REFRESH_INTERVAL
+
+          elapsed = 0
+          begin
+            refreshed = refresh
+            unless refreshed
+              main_thread.raise(LockRefreshError, "Could not refresh #{lock_type} lock '#{@name}'")
+              break
+            end
+          rescue StandardError => e
+            main_thread.raise(e)
+            break
+          end
+        end
+      end
+    end
 
     def writer_key
       "rw_lock:writer:#{@name}"

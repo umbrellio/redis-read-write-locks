@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 RSpec.describe "concurrent read-write locking" do
   let(:name) { "shared_resource" }
   let(:redis) { REDIS }
 
   it "allows many concurrent readers" do
     readers = 5.times.map { RedisReadWriteLocks::ReadLock.new(redis: redis, name: name, ttl: 5_000) }
-    results = readers.map { |r| r.acquire }
+    results = readers.map(&:acquire)
 
     expect(results).to all(be true)
 
@@ -18,7 +20,7 @@ RSpec.describe "concurrent read-write locking" do
     reader.acquire
 
     acquired_at = nil
-    reader_released_at = nil
+    nil
 
     writer_thread = Thread.new do
       writer.acquire(retry_count: 50, retry_delay: 50)
@@ -42,7 +44,7 @@ RSpec.describe "concurrent read-write locking" do
     writer.acquire
 
     acquired_at = nil
-    writer_released_at = nil
+    nil
 
     reader_thread = Thread.new do
       reader.acquire(retry_count: 50, retry_delay: 50)
