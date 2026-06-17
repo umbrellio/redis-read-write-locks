@@ -3,7 +3,7 @@
 module RedisReadWriteLocks
   module LockScripts
     # KEYS[1] = writer_key, KEYS[2] = readers_key
-    # ARGV[1] = token, ARGV[2] = expiry (unix ts), ARGV[3] = now (unix ts)
+    # ARGV[1] = token, ARGV[2] = expiry (unix ts), ARGV[3] = now (unix ts), ARGV[4] = ttl (ms)
     # Returns 1 = acquired, 0 = blocked
     ACQUIRE_READ = <<~LUA
       local writer_key = KEYS[1]
@@ -11,6 +11,7 @@ module RedisReadWriteLocks
       local token = ARGV[1]
       local expiry = tonumber(ARGV[2])
       local now = tonumber(ARGV[3])
+      local ttl_ms = tonumber(ARGV[4])
 
       redis.call('ZREMRANGEBYSCORE', readers_key, '-inf', now)
 
@@ -20,9 +21,9 @@ module RedisReadWriteLocks
 
       redis.call('ZADD', readers_key, expiry, token)
 
-      local current_ttl = redis.call('TTL', readers_key)
-      if current_ttl == -1 or (current_ttl > 0 and (now + current_ttl) < expiry) then
-        redis.call('EXPIREAT', readers_key, expiry + 1)
+      local current_pttl = redis.call('PTTL', readers_key)
+      if current_pttl == -1 or current_pttl < ttl_ms then
+        redis.call('PEXPIRE', readers_key, ttl_ms)
       end
 
       return 1
@@ -82,13 +83,14 @@ module RedisReadWriteLocks
     LUA
 
     # KEYS[1] = readers_key
-    # ARGV[1] = token, ARGV[2] = expiry (unix ts), ARGV[3] = now (unix ts)
+    # ARGV[1] = token, ARGV[2] = expiry (unix ts), ARGV[3] = now (unix ts), ARGV[4] = ttl (ms)
     # Returns 1 = refreshed, 0 = not in set
     REFRESH_READ = <<~LUA
       local readers_key = KEYS[1]
       local token = ARGV[1]
       local expiry = tonumber(ARGV[2])
       local now = tonumber(ARGV[3])
+      local ttl_ms = tonumber(ARGV[4])
 
       if redis.call('ZSCORE', readers_key, token) == false then
         return 0
@@ -96,9 +98,9 @@ module RedisReadWriteLocks
 
       redis.call('ZADD', readers_key, expiry, token)
 
-      local current_ttl = redis.call('TTL', readers_key)
-      if current_ttl == -1 or (current_ttl > 0 and (now + current_ttl) < expiry) then
-        redis.call('EXPIREAT', readers_key, expiry + 1)
+      local current_pttl = redis.call('PTTL', readers_key)
+      if current_pttl == -1 or current_pttl < ttl_ms then
+        redis.call('PEXPIRE', readers_key, ttl_ms)
       end
 
       return 1

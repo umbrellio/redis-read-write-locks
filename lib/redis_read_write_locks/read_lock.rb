@@ -15,7 +15,7 @@ module RedisReadWriteLocks
 
       now = Time.now.to_i
       expiry = now + (@ttl / 1000.0).ceil
-      eval_script(LockScripts::REFRESH_READ, keys: [readers_key], argv: [@token, expiry, now]) == 1
+      eval_script(LockScripts::REFRESH_READ, keys: [readers_key], argv: [@token, expiry, now, @ttl]) == 1
     end
 
     private
@@ -27,7 +27,7 @@ module RedisReadWriteLocks
       result = eval_script(
         LockScripts::ACQUIRE_READ,
         keys: [writer_key, readers_key],
-        argv: [@token, expiry, now]
+        argv: [@token, expiry, now, @ttl]
       )
 
       @acquired = result == 1
