@@ -211,5 +211,17 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       holder.release
       expect(waiting.value).to be true
     end
+
+    it "stops blocking readers once an unrefreshed pending entry expires" do
+      pending_key = "rw_lock:pending_writers:test_resource"
+
+      # A live writer would keep this score in the future.
+      REDIS.zadd(pending_key, Time.now.to_i + 5, "dead-writer-token")
+      expect(read_lock.acquire).to be false
+
+      # The writer is killed: nothing refreshes the score, so it falls behind now.
+      REDIS.zadd(pending_key, Time.now.to_i - 1, "dead-writer-token")
+      expect(read_lock.acquire).to be true
+    end
   end
 end
