@@ -197,6 +197,23 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       expect(read_lock.acquire).to be true
     end
 
+    # Covers the EXISTS(writer_key) half of ACQUIRE_WRITE's block condition: intent must be
+    # registered behind a writer too, so readers stay out at the writer-to-writer handoff.
+    it "registers intent while waiting behind another writer" do
+      holder = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
+      holder.acquire
+
+      writer = preferring_writer
+      waiting = Thread.new { writer.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(1)
+
+      holder.release
+      expect(waiting.value).to be true
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(0)
+    end
+
     it "lets a reader that already holds the lock keep refreshing" do
       holder = read_lock
       holder.acquire
