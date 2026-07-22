@@ -223,5 +223,38 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       REDIS.zadd(pending_key, Time.now.to_i - 1, "dead-writer-token")
       expect(read_lock.acquire).to be true
     end
+
+    it "clears its pending entry when retries are exhausted" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+
+      expect { writer.acquire(retry_count: 2, retry_delay: 10) }
+        .to raise_error(RedisReadWriteLocks::LockTimeoutError)
+
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(0)
+      expect(read_lock.acquire).to be true
+    end
+
+    it "keeps readers blocked while another writer is still pending" do
+      holder = read_lock
+      holder.acquire
+
+      writer_b = preferring_writer
+      waiting_b = Thread.new { writer_b.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      writer_a = preferring_writer
+      expect { writer_a.acquire(retry_count: 1, retry_delay: 10) }
+        .to raise_error(RedisReadWriteLocks::LockTimeoutError)
+
+      # Only writer_a's intent is gone; writer_b is still waiting.
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(1)
+      expect(read_lock.acquire).to be false
+
+      holder.release
+      expect(waiting_b.value).to be true
+    end
   end
 end

@@ -32,6 +32,8 @@ module RedisReadWriteLocks
         return true if try_acquire
       end
       raise LockTimeoutError, "Could not acquire #{lock_type} lock '#{@name}' after #{retry_count} retries"
+    ensure
+      abandon_pending unless acquired?
     end
 
     WATCHDOG_REFRESH_INTERVAL = 10
