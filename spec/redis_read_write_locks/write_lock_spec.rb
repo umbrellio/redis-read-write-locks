@@ -196,5 +196,20 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
 
       expect(read_lock.acquire).to be true
     end
+
+    it "lets a reader that already holds the lock keep refreshing" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      waiting = Thread.new { writer.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      expect(holder.refresh).to be true
+      expect(read_lock.acquire).to be false
+
+      holder.release
+      expect(waiting.value).to be true
+    end
   end
 end
