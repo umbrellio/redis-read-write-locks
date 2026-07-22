@@ -6,6 +6,7 @@ module RedisReadWriteLocks
   class BaseLock
     DEFAULT_TTL = 30_000
     DEFAULT_RETRY_DELAY = 100
+    PENDING_WRITER_TTL = 30_000
 
     attr_reader :name, :token
 
@@ -86,6 +87,14 @@ module RedisReadWriteLocks
 
     def readers_key
       "rw_lock:readers:#{@name}"
+    end
+
+    def pending_writers_key
+      "rw_lock:pending_writers:#{@name}"
+    end
+
+    def abandon_pending
+      nil
     end
 
     def lock_type

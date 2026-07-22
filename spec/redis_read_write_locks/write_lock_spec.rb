@@ -160,4 +160,41 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       end.to raise_error(Redis::CommandError, "READONLY")
     end
   end
+
+  describe "writer preference" do
+    def read_lock
+      RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
+    end
+
+    def preferring_writer
+      described_class.new(
+        redis: REDIS, name: "test_resource", ttl: 10_000, prefer_writer: true
+      )
+    end
+
+    it "blocks a new reader while a preferring writer waits" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      waiting = Thread.new { writer.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      expect(read_lock.acquire).to be false
+
+      holder.release
+      expect(waiting.value).to be true
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(0)
+    end
+
+    it "does not block new readers when prefer_writer is false" do
+      holder = read_lock
+      holder.acquire
+
+      writer = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
+      expect(writer.acquire).to be false
+
+      expect(read_lock.acquire).to be true
+    end
+  end
 end
