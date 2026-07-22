@@ -237,6 +237,39 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       expect(read_lock.acquire).to be true
     end
 
+    it "sizes the pending TTL from retry_delay so intent survives the gap until the next retry" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      writer.instance_variable_set(:@retry_delay, 60_000)
+      writer.send(:try_acquire)
+
+      expect(REDIS.pttl("rw_lock:pending_writers:test_resource")).to be > 30_000
+    end
+
+    it "keeps the default 30s pending TTL floor when retry_delay is small" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      writer.instance_variable_set(:@retry_delay, 10)
+      writer.send(:try_acquire)
+
+      expect(REDIS.pttl("rw_lock:pending_writers:test_resource")).to be <= 30_000
+    end
+
+    it "raises LockTimeoutError even when abandon_pending fails during cleanup" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      allow(writer).to receive(:abandon_pending).and_raise(Redis::CommandError, "READONLY")
+
+      expect { writer.acquire(retry_count: 2, retry_delay: 10) }
+        .to raise_error(RedisReadWriteLocks::LockTimeoutError)
+    end
+
     it "keeps readers blocked while another writer is still pending" do
       holder = read_lock
       holder.acquire

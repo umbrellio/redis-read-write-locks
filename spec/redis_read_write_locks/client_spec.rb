@@ -90,6 +90,21 @@ RSpec.describe RedisReadWriteLocks::Client do
       expect { client.write_lock("res") {} }.to raise_error(RedisReadWriteLocks::LockNotAcquiredError)
       reader.release
     end
+
+    it "blocks a new reader while a writer with prefer_writer: true waits" do
+      holder = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "res", ttl: 10_000)
+      holder.acquire
+
+      writer = client.write_lock("res", prefer_writer: true)
+      waiting = Thread.new { writer.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      blocked_reader = RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "res", ttl: 10_000)
+      expect(blocked_reader.acquire).to be false
+
+      holder.release
+      expect(waiting.value).to be true
+    end
   end
 
   describe "default_ttl" do

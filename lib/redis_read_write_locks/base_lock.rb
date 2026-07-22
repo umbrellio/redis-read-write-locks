@@ -23,6 +23,8 @@ module RedisReadWriteLocks
     end
 
     def acquire(retry_count: nil, retry_delay: DEFAULT_RETRY_DELAY)
+      @retry_delay = retry_count.nil? ? 0 : retry_delay
+
       return try_acquire if retry_count.nil?
 
       return true if try_acquire
@@ -33,7 +35,11 @@ module RedisReadWriteLocks
       end
       raise LockTimeoutError, "Could not acquire #{lock_type} lock '#{@name}' after #{retry_count} retries"
     ensure
-      abandon_pending unless acquired?
+      begin
+        abandon_pending unless acquired?
+      rescue StandardError
+        nil
+      end
     end
 
     WATCHDOG_REFRESH_INTERVAL = 10

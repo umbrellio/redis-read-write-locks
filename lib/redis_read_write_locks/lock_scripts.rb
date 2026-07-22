@@ -8,20 +8,20 @@ module RedisReadWriteLocks
     ACQUIRE_READ = <<~LUA
       local writer_key = KEYS[1]
       local readers_key = KEYS[2]
-      local pending_key = KEYS[3]
+      local pending_writers_key = KEYS[3]
       local token = ARGV[1]
       local expiry = tonumber(ARGV[2])
       local now = tonumber(ARGV[3])
       local ttl_ms = tonumber(ARGV[4])
 
       redis.call('ZREMRANGEBYSCORE', readers_key, '-inf', now)
-      redis.call('ZREMRANGEBYSCORE', pending_key, '-inf', now)
+      redis.call('ZREMRANGEBYSCORE', pending_writers_key, '-inf', now)
 
       if redis.call('EXISTS', writer_key) == 1 then
         return 0
       end
 
-      if redis.call('ZCARD', pending_key) > 0 then
+      if redis.call('ZCARD', pending_writers_key) > 0 then
         return 0
       end
 
@@ -50,7 +50,7 @@ module RedisReadWriteLocks
     ACQUIRE_WRITE = <<~LUA
       local writer_key = KEYS[1]
       local readers_key = KEYS[2]
-      local pending_key = KEYS[3]
+      local pending_writers_key = KEYS[3]
       local token = ARGV[1]
       local ttl = tonumber(ARGV[2])
       local now = tonumber(ARGV[3])
@@ -59,15 +59,15 @@ module RedisReadWriteLocks
       local pending_ttl_ms = tonumber(ARGV[6])
 
       redis.call('ZREMRANGEBYSCORE', readers_key, '-inf', now)
-      redis.call('ZREMRANGEBYSCORE', pending_key, '-inf', now)
+      redis.call('ZREMRANGEBYSCORE', pending_writers_key, '-inf', now)
 
       if redis.call('ZCARD', readers_key) > 0 or redis.call('EXISTS', writer_key) == 1 then
         if prefer == 1 then
-          redis.call('ZADD', pending_key, pending_expiry, token)
+          redis.call('ZADD', pending_writers_key, pending_expiry, token)
 
-          local current_pttl = redis.call('PTTL', pending_key)
+          local current_pttl = redis.call('PTTL', pending_writers_key)
           if current_pttl == -1 or current_pttl < pending_ttl_ms then
-            redis.call('PEXPIRE', pending_key, pending_ttl_ms)
+            redis.call('PEXPIRE', pending_writers_key, pending_ttl_ms)
           end
         end
 
@@ -75,7 +75,7 @@ module RedisReadWriteLocks
       end
 
       redis.call('SET', writer_key, token, 'PX', ttl)
-      redis.call('ZREM', pending_key, token)
+      redis.call('ZREM', pending_writers_key, token)
       return 1
     LUA
 
