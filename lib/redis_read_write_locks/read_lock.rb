@@ -26,7 +26,7 @@ module RedisReadWriteLocks
 
       result = eval_script(
         LockScripts::ACQUIRE_READ,
-        keys: [writer_key, readers_key],
+        keys: [writer_key, readers_key, pending_writers_key],
         argv: [@token, expiry, now, @ttl]
       )
 

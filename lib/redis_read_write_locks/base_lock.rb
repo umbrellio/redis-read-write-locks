@@ -6,6 +6,7 @@ module RedisReadWriteLocks
   class BaseLock
     DEFAULT_TTL = 30_000
     DEFAULT_RETRY_DELAY = 100
+    PENDING_WRITER_TTL = 30_000
 
     attr_reader :name, :token
 
@@ -22,6 +23,8 @@ module RedisReadWriteLocks
     end
 
     def acquire(retry_count: nil, retry_delay: DEFAULT_RETRY_DELAY)
+      @retry_delay = retry_count.nil? ? 0 : retry_delay
+
       return try_acquire if retry_count.nil?
 
       return true if try_acquire
@@ -31,6 +34,12 @@ module RedisReadWriteLocks
         return true if try_acquire
       end
       raise LockTimeoutError, "Could not acquire #{lock_type} lock '#{@name}' after #{retry_count} retries"
+    ensure
+      begin
+        abandon_pending unless acquired?
+      rescue StandardError
+        nil
+      end
     end
 
     WATCHDOG_REFRESH_INTERVAL = 10
@@ -86,6 +95,14 @@ module RedisReadWriteLocks
 
     def readers_key
       "rw_lock:readers:#{@name}"
+    end
+
+    def pending_writers_key
+      "rw_lock:pending_writers:#{@name}"
+    end
+
+    def abandon_pending
+      nil
     end
 
     def lock_type

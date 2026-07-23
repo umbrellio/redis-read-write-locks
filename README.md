@@ -49,6 +49,7 @@ client = RedisReadWriteLocks::Client.new(redis, default_ttl: 60_000)
 | Option | Default | Description |
 |--------|---------|-------------|
 | `ttl`  | `30`    | Lock TTL in seconds. Lock auto-expires if holder crashes. |
+| `prefer_writer` | `false` | Write lock only. When `true`, a writer blocked on acquire registers its intent so new readers are refused until it acquires or gives up. Only takes effect when `retry_count` is set — a non-retrying writer isn't waiting, so it registers and immediately clears its intent, making the flag a no-op. |
 
 ### Errors
 
@@ -60,8 +61,10 @@ client = RedisReadWriteLocks::Client.new(redis, default_ttl: 60_000)
 ## Redis key structure
 
 ```
-rw_lock:writer:<name>   # String, holds owner token, TTL = lock TTL
-rw_lock:readers:<name>  # Sorted set, member = token, score = expiry timestamp
+rw_lock:writer:<name>           # String, holds owner token, TTL = lock TTL
+rw_lock:readers:<name>          # Sorted set, member = token, score = expiry timestamp
+rw_lock:pending_writers:<name>  # Sorted set, member = token, score = pending-intent expiry timestamp.
+                                 # Populated only by writers using `prefer_writer: true`.
 ```
 
 ## Requirements

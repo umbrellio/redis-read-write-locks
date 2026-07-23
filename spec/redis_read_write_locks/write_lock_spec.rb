@@ -160,4 +160,151 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       end.to raise_error(Redis::CommandError, "READONLY")
     end
   end
+
+  describe "writer preference" do
+    def read_lock
+      RedisReadWriteLocks::ReadLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
+    end
+
+    def preferring_writer
+      described_class.new(
+        redis: REDIS, name: "test_resource", ttl: 10_000, prefer_writer: true
+      )
+    end
+
+    it "blocks a new reader while a preferring writer waits" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      waiting = Thread.new { writer.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      expect(read_lock.acquire).to be false
+
+      holder.release
+      expect(waiting.value).to be true
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(0)
+    end
+
+    it "does not block new readers when prefer_writer is false" do
+      holder = read_lock
+      holder.acquire
+
+      writer = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
+      expect(writer.acquire).to be false
+
+      expect(read_lock.acquire).to be true
+    end
+
+    # Covers the EXISTS(writer_key) half of ACQUIRE_WRITE's block condition: intent must be
+    # registered behind a writer too, so readers stay out at the writer-to-writer handoff.
+    it "registers intent while waiting behind another writer" do
+      holder = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
+      holder.acquire
+
+      writer = preferring_writer
+      waiting = Thread.new { writer.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(1)
+
+      holder.release
+      expect(waiting.value).to be true
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(0)
+    end
+
+    it "lets a reader that already holds the lock keep refreshing" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      waiting = Thread.new { writer.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      expect(holder.refresh).to be true
+      expect(read_lock.acquire).to be false
+
+      holder.release
+      expect(waiting.value).to be true
+    end
+
+    it "stops blocking readers once an unrefreshed pending entry expires" do
+      pending_key = "rw_lock:pending_writers:test_resource"
+
+      # A live writer would keep this score in the future.
+      REDIS.zadd(pending_key, Time.now.to_i + 5, "dead-writer-token")
+      expect(read_lock.acquire).to be false
+
+      # The writer is killed: nothing refreshes the score, so it falls behind now.
+      REDIS.zadd(pending_key, Time.now.to_i - 1, "dead-writer-token")
+      expect(read_lock.acquire).to be true
+    end
+
+    it "clears its pending entry when retries are exhausted" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+
+      expect { writer.acquire(retry_count: 2, retry_delay: 10) }
+        .to raise_error(RedisReadWriteLocks::LockTimeoutError)
+
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(0)
+      expect(read_lock.acquire).to be true
+    end
+
+    it "sizes the pending TTL from retry_delay so intent survives the gap until the next retry" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      writer.instance_variable_set(:@retry_delay, 60_000)
+      writer.send(:try_acquire)
+
+      expect(REDIS.pttl("rw_lock:pending_writers:test_resource")).to be > 30_000
+    end
+
+    it "keeps the default 30s pending TTL floor when retry_delay is small" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      writer.instance_variable_set(:@retry_delay, 10)
+      writer.send(:try_acquire)
+
+      expect(REDIS.pttl("rw_lock:pending_writers:test_resource")).to be <= 30_000
+    end
+
+    it "raises LockTimeoutError even when abandon_pending fails during cleanup" do
+      holder = read_lock
+      holder.acquire
+
+      writer = preferring_writer
+      allow(writer).to receive(:abandon_pending).and_raise(Redis::CommandError, "READONLY")
+
+      expect { writer.acquire(retry_count: 2, retry_delay: 10) }
+        .to raise_error(RedisReadWriteLocks::LockTimeoutError)
+    end
+
+    it "keeps readers blocked while another writer is still pending" do
+      holder = read_lock
+      holder.acquire
+
+      writer_b = preferring_writer
+      waiting_b = Thread.new { writer_b.acquire(retry_count: 300, retry_delay: 10) }
+      sleep 0.2
+
+      writer_a = preferring_writer
+      expect { writer_a.acquire(retry_count: 1, retry_delay: 10) }
+        .to raise_error(RedisReadWriteLocks::LockTimeoutError)
+
+      # Only writer_a's intent is gone; writer_b is still waiting.
+      expect(REDIS.zcard("rw_lock:pending_writers:test_resource")).to eq(1)
+      expect(read_lock.acquire).to be false
+
+      holder.release
+      expect(waiting_b.value).to be true
+    end
+  end
 end
