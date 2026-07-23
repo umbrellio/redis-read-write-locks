@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "redis_read_write_locks/version"
 require_relative "redis_read_write_locks/errors"
 require_relative "redis_read_write_locks/lock_scripts"

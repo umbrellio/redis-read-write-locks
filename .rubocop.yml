@@ -1,0 +1,60 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.2
+  Exclude:
+    - "*.gemspec"
+
+plugins:
+  - rubocop-rspec
+
+Style/FrozenStringLiteralComment:
+  Enabled: true
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+Style/Documentation:
+  Enabled: false
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+
+Metrics/MethodLength:
+  Max: 20
+
+Metrics/AbcSize:
+  Max: 20
+
+Naming/FileName:
+  Exclude:
+    - "lib/redis-read-write-locks.rb"
+
+Naming/PredicateMethod:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Max: 15
+
+RSpec/DescribeClass:
+  Enabled: false
+
+RSpec/SubjectStub:
+  Enabled: false
+
+RSpec/IncludeExamples:
+  Enabled: false
+
+Lint/EmptyBlock:
+  Exclude:
+    - "spec/**/*"
+
+Lint/ConstantDefinitionInBlock:
+  Exclude:
+    - "spec/spec_helper.rb"

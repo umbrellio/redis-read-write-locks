@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 RSpec.describe RedisReadWriteLocks::ReadLock do
   subject(:lock) { described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000) }
 
@@ -34,7 +36,10 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
         writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
         writer.acquire
 
-        Thread.new { sleep 0.05; writer.release }
+        Thread.new do
+          sleep 0.05
+          writer.release
+        end
 
         expect(lock.acquire(retry_count: 20, retry_delay: 10)).to be true
       end
@@ -68,6 +73,28 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
     end
   end
 
+  describe "#refresh" do
+    it "returns false when not acquired" do
+      expect(lock.refresh).to be false
+    end
+
+    it "extends TTL of held lock" do
+      short_lock = described_class.new(redis: REDIS, name: "test_resource", ttl: 500)
+      short_lock.acquire
+      sleep 0.4
+      expect(short_lock.refresh).to be true
+      sleep 0.4
+      expect(REDIS.exists?("rw_lock:readers:test_resource")).to be true
+      short_lock.release
+    end
+
+    it "returns false when token expired in Redis" do
+      lock.acquire
+      REDIS.zrem("rw_lock:readers:test_resource", lock.token)
+      expect(lock.refresh).to be false
+    end
+  end
+
   describe "#synchronize" do
     it "acquires, yields, releases" do
       result = nil
@@ -92,9 +119,46 @@ RSpec.describe RedisReadWriteLocks::ReadLock do
     it "waits for lock with retry_count" do
       writer = RedisReadWriteLocks::WriteLock.new(redis: REDIS, name: "test_resource", ttl: 10_000)
       writer.acquire
-      Thread.new { sleep 0.05; writer.release }
+      Thread.new do
+        sleep 0.05
+        writer.release
+      end
 
       expect { lock.synchronize(retry_count: 20, retry_delay: 10) {} }.not_to raise_error
+    end
+
+    it "watchdog keeps lock alive beyond TTL" do
+      stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_REFRESH_INTERVAL", 0.1)
+      stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_SLEEP_INTERVAL", 0.05)
+
+      short_lock = described_class.new(redis: REDIS, name: "test_resource", ttl: 500)
+      short_lock.synchronize do
+        sleep 0.8
+        expect(REDIS.exists?("rw_lock:readers:test_resource")).to be true
+      end
+    end
+
+    it "raises LockRefreshError in main thread when lock lost in Redis" do
+      stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_REFRESH_INTERVAL", 0.1)
+      stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_SLEEP_INTERVAL", 0.05)
+
+      short_lock = described_class.new(redis: REDIS, name: "test_resource", ttl: 10_000)
+      expect do
+        short_lock.synchronize do
+          REDIS.zrem("rw_lock:readers:test_resource", short_lock.token)
+          sleep 0.5
+        end
+      end.to raise_error(RedisReadWriteLocks::LockRefreshError)
+    end
+
+    it "raises exception from refresh in main thread" do
+      stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_REFRESH_INTERVAL", 0.1)
+      stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_SLEEP_INTERVAL", 0.05)
+
+      allow(lock).to receive(:refresh).and_raise(Redis::CommandError, "READONLY")
+      expect do
+        lock.synchronize { sleep 0.5 }
+      end.to raise_error(Redis::CommandError, "READONLY")
     end
   end
 end

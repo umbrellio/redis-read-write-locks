@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "redis"
 require "redis_read_write_locks"
 
