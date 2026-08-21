@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    redis-read-write-locks (0.5.0)
+    redis-read-write-locks (0.5.1)
 
 GEM
   remote: https://rubygems.org/

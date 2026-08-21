@@ -126,6 +126,16 @@ RSpec.describe RedisReadWriteLocks::WriteLock do
       expect { lock.synchronize {} }.to raise_error(RedisReadWriteLocks::LockNotAcquiredError)
     end
 
+    it "releases without waiting out the watchdog's sleep interval" do
+      stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_SLEEP_INTERVAL", 5)
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      lock.synchronize { sleep 0.05 }
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+      expect(elapsed).to be < 1
+    end
+
     it "watchdog keeps lock alive beyond TTL" do
       stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_REFRESH_INTERVAL", 0.1)
       stub_const("RedisReadWriteLocks::BaseLock::WATCHDOG_SLEEP_INTERVAL", 0.05)

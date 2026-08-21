@@ -47,12 +47,12 @@ module RedisReadWriteLocks
 
     def synchronize(retry_count: nil, retry_delay: DEFAULT_RETRY_DELAY, &block)
       acquire_or_raise(retry_count: retry_count, retry_delay: retry_delay)
-      stopped = false
-      watchdog = start_watchdog(Thread.current, -> { stopped })
+      stop = Thread::Queue.new
+      watchdog = start_watchdog(Thread.current, stop)
       begin
         block.call
       ensure
-        stopped = true
+        stop.close
         watchdog.join
         release
       end
@@ -66,13 +66,18 @@ module RedisReadWriteLocks
       acquire || raise(LockNotAcquiredError, "Could not acquire #{lock_type} lock '#{@name}'")
     end
 
-    def start_watchdog(main_thread, stopped)
+    # Waits on the queue rather than sleeping, so closing it on release wakes the
+    # watchdog at once. While it slept, every synchronize paid up to a full
+    # WATCHDOG_SLEEP_INTERVAL on the way out - far more than a short critical
+    # section takes, and callers that take many brief locks paid it every time.
+    def start_watchdog(main_thread, stop)
       Thread.new do
         elapsed = 0.0
-        until stopped.call
-          sleep WATCHDOG_SLEEP_INTERVAL
+        loop do
+          stop.pop(timeout: WATCHDOG_SLEEP_INTERVAL)
+          break if stop.closed?
+
           elapsed += WATCHDOG_SLEEP_INTERVAL
-          next if stopped.call
           next unless elapsed >= WATCHDOG_REFRESH_INTERVAL
 
           elapsed = 0.0
